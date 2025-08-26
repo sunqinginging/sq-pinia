@@ -3,18 +3,44 @@ import {
   effectScope,
   getCurrentInstance,
   inject,
+  isReactive,
+  isRef,
   reactive,
+  toRefs,
 } from "vue";
 import { piniaSymbol } from "./rootStore";
+
+function isComputed(v) {
+  return !!(isRef(v) && v.effect);
+}
+
+function isObject(value) {
+  return typeof value == "object" && value !== null;
+}
+
+function mergeReactiveObject(target, state) {
+  for (let key in state) {
+    let oldValue = target[key];
+    let newValue = state[key];
+    if (isObject(oldValue) && isObject(newValue)) {
+      mergeReactiveObject(oldValue, newValue);
+    } else {
+      target[key] = newValue;
+    }
+  }
+  return target;
+}
 
 function createOptionsStore(id, options, pinia) {
   const { state, actions, getters } = options;
 
   function setup() {
     // 对options里state actions getters做处理
-    const localState = (pinia.state.value[id] = state ? state() : {});
-
+    pinia.state.value[id] = state ? state() : {};
+    // 这里的localState本身还不是ref值不具备响应式
+    const localState = toRefs(pinia.state.value[id]);
     return Object.assign(
+      {},
       localState,
       actions,
       Object.keys(getters || {}).reduce((meno, name) => {
@@ -27,12 +53,39 @@ function createOptionsStore(id, options, pinia) {
     );
   }
 
-  createSetupStore(id, setup, pinia);
+  const store = createSetupStore(id, setup, pinia, true);
+  // 选项是api 重置方法
+  store.$reset = function () {
+    const newState = state ? state() : {};
+    store.$patch((state) => {
+      Object.assign(state, newState);
+    });
+  };
 }
 
-function createSetupStore(id, setup, pinia) {
+function createSetupStore(id, setup, pinia, isOption) {
   let scope;
-  const store = reactive({});
+  function $patch(partialStateOrMutator) {
+    if (typeof partialStateOrMutator == "object") {
+      mergeReactiveObject(pinia.state.value[id], partialStateOrMutator);
+    } else {
+      // 函数
+      partialStateOrMutator(pinia.state.value[id]);
+    }
+  }
+
+  const partialStore = {
+    $patch,
+  };
+
+  const store = reactive(partialStore);
+
+  const initialState = pinia.state.value[id];
+
+  // setup API需要额外处理判断 哪些是state
+  if (!initialState && !isOption) {
+    pinia.state.value[id] = {};
+  }
 
   const setupStore = pinia._e.run(() => {
     scope = effectScope();
@@ -50,11 +103,18 @@ function createSetupStore(id, setup, pinia) {
     if (typeof prop == "function") {
       setupStore[key] = wrapAction(key, prop);
     }
+    // 判断是否为状态 ref 但是计算属性本质也是个ref
+    if ((isRef(prop) && !isComputed(prop)) || isReactive(prop)) {
+      if (!isOption) {
+        // 复制给pinia的state
+        pinia.state.value[id][key] = prop;
+      }
+    }
   }
 
   pinia._s.set(id, store);
-
   Object.assign(store, setupStore);
+  console.log(store);
   return store;
 }
 

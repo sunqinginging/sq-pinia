@@ -4,6 +4,7 @@ export const useCounterStore = defineStore("counter", {
   state: () => {
     return {
       count: 0,
+      arr: [1, 2],
     };
   },
   getters: {
