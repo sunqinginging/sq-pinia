@@ -21,6 +21,25 @@ const handleClick2 = () => {
 const handleReset = () => {
   store.$reset();
 };
+
+store.$subscribe((mutation, state) => {
+  console.log(state, "卧槽改变了");
+});
+
+// 使用store的$onAction
+store.$onAction(
+  ({
+    name, // action 名称
+    store, // store 实例，类似 `someStore`
+    args, // 传递给 action 的参数数组
+    after, // 在 action 返回或解决后的钩子
+    onError, // action 抛出或拒绝的钩子
+  }) => {
+    after((res) => {
+      console.log(res, name, store, args);
+    });
+  }
+);
 </script>
 
 <template>

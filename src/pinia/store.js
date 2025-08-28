@@ -7,8 +7,10 @@ import {
   isRef,
   reactive,
   toRefs,
+  watch,
 } from "vue";
 import { piniaSymbol } from "./rootStore";
+import { addSubscription, triggerSubscriptions } from "./subscribe";
 
 function isComputed(v) {
   return !!(isRef(v) && v.effect);
@@ -73,9 +75,23 @@ function createSetupStore(id, setup, pinia, isOption) {
       partialStateOrMutator(pinia.state.value[id]);
     }
   }
-
+  let actionSubscriptions = [];
   const partialStore = {
     $patch,
+    $subscribe(callback, options) {
+      // watch也是effect 所有也用effectScope实例包裹起来 统一管理
+      scope.run(() =>
+        watch(
+          pinia.state.value[id],
+          (state) => {
+            // 调用$subscribe的时候 用户接受2个参数 一个mutation一个state
+            callback({ storeId: id }, state);
+          },
+          options
+        )
+      );
+    },
+    $onAction: addSubscription.bind(null, actionSubscriptions),
   };
 
   const store = reactive(partialStore);
@@ -94,7 +110,45 @@ function createSetupStore(id, setup, pinia, isOption) {
 
   function wrapAction(key, action) {
     return function () {
-      return action.apply(store, arguments);
+      const afterCallbackList = [];
+      const onErrorCallbackList = [];
+
+      function after(callback) {
+        afterCallbackList.push(callback);
+      }
+
+      function onError(callback) {
+        onErrorCallbackList.push(callback);
+      }
+      console.log(...arguments);
+      triggerSubscriptions(actionSubscriptions, {
+        after,
+        onError,
+        name: id,
+        store,
+        args: [...arguments],
+      });
+      let ret;
+      try {
+        ret = action.apply(store, arguments);
+      } catch (error) {
+        triggerSubscriptions(onErrorCallbackList, error);
+      }
+      // action返回结果可能是一个promise after回调列表会在promise resolve之后执行
+      // after的回调函数可以接受一个value值 为promise的resolve的值
+      if (ret instanceof Promise) {
+        return ret
+          .then((result) => {
+            triggerSubscriptions(afterCallbackList, result);
+          })
+          .catch((err) => {
+            triggerSubscriptions(onErrorCallbackList, err);
+          });
+      } else {
+        triggerSubscriptions(afterCallbackList, ret);
+      }
+      // action抛出错误或者action返回的promise是reject
+      return ret;
     };
   }
 
@@ -114,7 +168,6 @@ function createSetupStore(id, setup, pinia, isOption) {
 
   pinia._s.set(id, store);
   Object.assign(store, setupStore);
-  console.log(store);
   return store;
 }
 
