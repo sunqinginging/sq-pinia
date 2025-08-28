@@ -8,7 +8,13 @@ export function createPinia() {
   const scope = effectScope();
   const state = scope.run(() => ref({})); // 保存每个store的state
 
+  const _p = [];
   const pinia = {
+    use(plugin) {
+      _p.push(plugin);
+      return this;
+    },
+    _p,
     _s: new Map(), // 保存所有的store
     _e: scope,
     install(app) {

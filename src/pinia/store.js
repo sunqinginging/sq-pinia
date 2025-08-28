@@ -92,9 +92,17 @@ function createSetupStore(id, setup, pinia, isOption) {
       );
     },
     $onAction: addSubscription.bind(null, actionSubscriptions),
+    $dispose() {
+      // 停止 store 的相关作用域，并从 store 注册表中删除它
+      scope.stop();
+      actionSubscriptions = [];
+      pinia._s.delete(id);
+    },
   };
 
   const store = reactive(partialStore);
+
+  store.$id = id;
 
   const initialState = pinia.state.value[id];
 
@@ -168,6 +176,27 @@ function createSetupStore(id, setup, pinia, isOption) {
 
   pinia._s.set(id, store);
   Object.assign(store, setupStore);
+
+  // 替换state 不能完全替换掉 store 的 state，因为那样会破坏其响应性
+  // 需要使用store的属性$state
+  Object.defineProperty(store, "$state", {
+    get() {
+      return pinia.state.value[id];
+    },
+    set: (state) => {
+      $patch(($state) => {
+        Object.assign($state, state);
+      });
+    },
+  });
+
+  pinia._p.forEach((plugin) => {
+    Object.assign(
+      store,
+      scope.run(() => plugin({ store }))
+    );
+  });
+
   return store;
 }
 
