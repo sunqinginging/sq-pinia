@@ -17,4 +17,7 @@ export const useCounterStore = defineStore("counter", {
       this.count += payload;
     },
   },
+  debounce: {
+    increment: 3000,
+  },
 });

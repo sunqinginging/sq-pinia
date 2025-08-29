@@ -57,7 +57,7 @@ function createOptionsStore(id, options, pinia) {
     );
   }
 
-  const store = createSetupStore(id, setup, pinia, true);
+  const store = createSetupStore(id, setup, pinia, true, options);
   // 选项是api 重置方法
   store.$reset = function () {
     const newState = state ? state() : {};
@@ -67,7 +67,16 @@ function createOptionsStore(id, options, pinia) {
   };
 }
 
-function createSetupStore(id, setup, pinia, isOption) {
+/**
+ *
+ * @param {*} id
+ * @param {*} setup
+ * @param {*} pinia
+ * @param {*} isOption
+ * @param {*} options 这里的options会被插件的函数可以获取到
+ * @returns
+ */
+function createSetupStore(id, setup, pinia, isOption, options) {
   let scope;
   function $patch(partialStateOrMutator) {
     if (typeof partialStateOrMutator == "object") {
@@ -191,29 +200,31 @@ function createSetupStore(id, setup, pinia, isOption) {
       });
     },
   });
-
+  console.log(options);
   pinia._p.forEach((plugin) => {
     Object.assign(
       store,
-      scope.run(() => plugin({ store }))
+      scope.run(() => plugin({ store, options }))
     );
   });
 
   return store;
 }
 
-export function defineStore(idOrOptions, setup) {
+export function defineStore(idOrOptions, setup, setupExtraOpts = {}) {
   let id;
   let options;
   if (typeof idOrOptions == "string") {
     id = idOrOptions;
     options = setup;
   } else {
+    // 选项式
     options = idOrOptions;
     id = idOrOptions.id;
   }
 
   const isSetupStore = typeof setup == "function";
+  // 使用setup语法 自定义选项作为第三个参数传递
 
   function useStore() {
     // 这个方法一般在组件用调用
@@ -228,7 +239,7 @@ export function defineStore(idOrOptions, setup) {
 
     if (!pinia._s.has(id)) {
       if (isSetupStore) {
-        createSetupStore(id, setup, pinia);
+        createSetupStore(id, setup, pinia, false, setupExtraOpts);
       } else {
         createOptionsStore(id, options, pinia);
       }
