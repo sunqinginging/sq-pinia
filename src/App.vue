@@ -2,10 +2,13 @@
 import { getCurrentInstance } from "vue";
 import { useCounterStore } from "./stores/counter";
 import { useCounterStore2 } from "./stores/counter2";
+import { storeToRefs } from "./pinia/storeToRefs";
 
 const store = useCounterStore();
 
 const store2 = useCounterStore2();
+
+const { count } = storeToRefs(store);
 
 const handleClick = () => {
   store.increment(2);
@@ -44,6 +47,7 @@ store.$onAction(
 
 <template>
   <div>{{ store.count }}</div>
+  <div>通过storeToRefs解构的count的值：{{ count }}</div>
   <div>加倍： {{ store.double }}</div>
   <button @click="handleClick">修改状态</button>
   <button @click="handleClick2">$patch修改状态</button>

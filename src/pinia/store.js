@@ -11,6 +11,8 @@ import {
 } from "vue";
 import { piniaSymbol } from "./rootStore";
 import { addSubscription, triggerSubscriptions } from "./subscribe";
+import { setActivePinia } from "pinia";
+import { activePinia } from "./createPinia";
 
 function isComputed(v) {
   return !!(isRef(v) && v.effect);
@@ -217,7 +219,12 @@ export function defineStore(idOrOptions, setup) {
     // 这个方法一般在组件用调用
     // 这个方法 会在不同组件被多次调用 需要通过pinia的_s来保存和维护
     let instance = getCurrentInstance();
-    const pinia = instance && inject(piniaSymbol);
+    let pinia = instance && inject(piniaSymbol);
+
+    if (pinia) {
+      setActivePinia(pinia);
+    }
+    pinia = activePinia;
 
     if (!pinia._s.has(id)) {
       if (isSetupStore) {
